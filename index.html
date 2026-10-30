@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Open Morning</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0C0E;
+    --panel:#15171B;
+    --line:#2A2D33;
+    --text:#FFFFFF;
+    --muted:#9AA0A8;
+    --accent:#A9D8F0;   /* change this one line to recolor the whole app */
+    --limit:3;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:Poppins,system-ui,sans-serif;padding:24px 16px 48px}
+  .wrap{max-width:1000px;margin:0 auto}
+  header{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:20px}
+  h1{margin:0;font-size:clamp(28px,6vw,44px);letter-spacing:-.5px}
+  h1 span{color:var(--accent)}
+  .tag{color:var(--muted);font-size:14px;margin:4px 0 0}
+  textarea{width:100%;min-height:150px;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:16px;font:inherit;font-size:16px;resize:vertical}
+  textarea:focus{outline:2px solid var(--accent);border-color:transparent}
+  .row{display:flex;gap:10px;margin:12px 0 28px;flex-wrap:wrap}
+  button{font:inherit;cursor:pointer;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);padding:10px 18px}
+  .primary{background:var(--accent);color:#0B0C0E;border-color:var(--accent);font-weight:700}
+  .cols{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  @media (max-width:860px){.cols{grid-template-columns:1fr 1fr}}
+  @media (max-width:520px){.cols{grid-template-columns:1fr}}
+  .col{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;min-height:140px}
+  .col h2{font-size:15px;margin:0 0 10px;display:flex;justify-content:space-between}
+  .col h2 small{color:var(--muted);font-family:'JetBrains Mono',monospace;font-weight:500}
+  .col.top{border-color:var(--accent)}
+  .card{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;font-size:15px}
+  .card .btns{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+  .card button{padding:4px 10px;font-size:12px}
+  .card.win{border-color:var(--accent)}
+  .inbox{margin-bottom:14px}
+  .timer{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 8px 6px 18px}
+  .clock{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--accent)}
+  .note{color:var(--accent);font-size:13px;min-height:18px;margin:-18px 0 14px}
+  .pop{animation:pop .5s ease}
+  @keyframes pop{0%{transform:scale(.9)}60%{transform:scale(1.05)}100%{transform:scale(1)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Open <span>Morning</span></h1>
+      <p class="tag">Empty your head. Keep three. Let the rest go.</p>
+    </div>
+    <div class="timer">
+      <span class="clock" id="clock">25:00</span>
+      <button class="primary" id="go">Focus</button>
+      <button id="reset">Reset</button>
+    </div>
+  </header>
+
+  <textarea id="dump" placeholder="Brain dump. One thing per line."></textarea>
+  <div class="row">
+    <button class="primary" id="sort">Sort</button>
+    <button id="clear">Start fresh</button>
+  </div>
+  <div class="note" id="note"></div>
+
+  <div class="col inbox" id="inbox-col"><h2>To sort <small id="c-inbox"></small></h2><div id="inbox"></div></div>
+  <div class="cols">
+    <div class="col top"><h2>Top 3 today <small id="c-top"></small></h2><div id="top"></div></div>
+    <div class="col"><h2>Later this week <small id="c-later"></small></h2><div id="later"></div></div>
+    <div class="col"><h2>Let it go <small id="c-go"></small></h2><div id="go-list"></div></div>
+    <div class="col"><h2>Wins <small id="c-wins"></small></h2><div id="wins"></div></div>
+  </div>
+</div>
+
+<script>
+const LIMIT = 3;
+let items = [];
+try { items = JSON.parse(localStorage.getItem('openmorning') || '[]'); } catch(e) {}
+const save = () => { try { localStorage.setItem('openmorning', JSON.stringify(items)); } catch(e) {} };
+const $ = id => document.getElementById(id);
+const lists = { inbox:'inbox', top:'top', later:'later', go:'go-list', wins:'wins' };
+const note = msg => { $('note').textContent = msg; clearTimeout(note.t); note.t = setTimeout(()=>$('note').textContent='', 2500); };
+
+function move(id, where){
+  if(where==='top' && items.filter(i=>i.col==='top').length >= LIMIT){ note('Top 3 is full. Something has to move first.'); return; }
+  const it = items.find(i=>i.id===id); it.col = where; it.fresh = where==='wins'; save(); render();
+  if(where==='wins') note('That one is done. Win.');
+}
+function render(){
+  Object.values(lists).forEach(l=>$(l).innerHTML='');
+  for(const it of items){
+    const c = document.createElement('div'); c.className='card'+(it.col==='wins'?' win':'')+(it.fresh?' pop':'');
+    c.textContent = it.text; it.fresh=false;
+    const b = document.createElement('div'); b.className='btns';
+    const add = (label, where) => { const x=document.createElement('button'); x.textContent=label; x.onclick=()=>move(it.id,where); b.appendChild(x); };
+    if(it.col!=='top' && it.col!=='wins') add('Top 3','top');
+    if(it.col!=='later' && it.col!=='wins') add('Later','later');
+    if(it.col!=='go' && it.col!=='wins') add('Let go','go');
+    if(it.col==='top') add('Done','wins');
+    c.appendChild(b); $(lists[it.col]).appendChild(c);
+  }
+  const count = col => items.filter(i=>i.col===col).length || '';
+  $('c-inbox').textContent=count('inbox'); $('c-top').textContent=(items.filter(i=>i.col==='top').length)+'/'+LIMIT;
+  $('c-later').textContent=count('later'); $('c-go').textContent=count('go'); $('c-wins').textContent=count('wins');
+  $('inbox-col').style.display = items.some(i=>i.col==='inbox') ? '' : 'none';
+}
+$('sort').onclick = () => {
+  const lines = $('dump').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  if(!lines.length){ note('Dump something first.'); return; }
+  lines.forEach(t=>items.push({id:Date.now()+Math.random(), text:t, col:'inbox'}));
+  $('dump').value=''; save(); render();
+};
+$('clear').onclick = () => { items=[]; save(); render(); };
+
+let left = 25*60, tick = null;
+const show = () => $('clock').textContent = String(Math.floor(left/60)).padStart(2,'0')+':'+String(left%60).padStart(2,'0');
+$('go').onclick = () => {
+  if(tick){ clearInterval(tick); tick=null; $('go').textContent='Focus'; return; }
+  $('go').textContent='Pause';
+  tick = setInterval(()=>{ left--; show(); if(left<=0){ clearInterval(tick); tick=null; left=25*60; $('go').textContent='Focus'; note('Focus block done. Take a breath.'); show(); } },1000);
+};
+$('reset').onclick = () => { clearInterval(tick); tick=null; left=25*60; $('go').textContent='Focus'; show(); };
+render();
+</script>
+</body>
+</html>
